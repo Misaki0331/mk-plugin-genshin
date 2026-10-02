@@ -2,6 +2,7 @@ package genshin
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -145,24 +146,33 @@ func TestFetch_ParsesAvatarInfoList(t *testing.T) {
 	}
 }
 
-// 取得元が想定外の数を返しても保存が膨らまないよう 8 体で切る。
+// 12体まで保持し、取得元が想定外の数を返しても保存が膨らまないよう切る。
 func TestFetch_CapsCharacters(t *testing.T) {
-	list := ""
-	for i := 0; i < 12; i++ {
-		if i > 0 {
-			list += ","
-		}
-		list += sampleAvatar
-	}
-	srv := fakeEnka(t, http.StatusOK,
-		`{"playerInfo":{"nickname":"x","level":1},"avatarInfoList":[`+list+`],"ttl":300}`)
-
-	got, err := testClient(srv.URL).fetch(context.Background(), "800000000")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got.characters) != 8 {
-		t.Fatalf("8 体で切れていない: %d", len(got.characters))
+	for _, count := range []int{8, 12, 13} {
+		t.Run(fmt.Sprintf("%d", count), func(t *testing.T) {
+			list, showcase := "", ""
+			for i := range count {
+				if i > 0 {
+					list += ","
+					showcase += ","
+				}
+				list += sampleAvatar
+				showcase += fmt.Sprintf(`{"avatarId":%d,"level":90}`, i+1)
+			}
+			srv := fakeEnka(t, http.StatusOK,
+				`{"playerInfo":{"nickname":"x","level":1,"showAvatarInfoList":[`+showcase+`]},"avatarInfoList":[`+list+`],"ttl":300}`)
+			got, err := testClient(srv.URL).fetch(context.Background(), "800000000")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := min(count, 12)
+			if len(got.characters) != want || len(got.showcase) != want {
+				t.Fatalf("expected %d characters and previews: details=%d previews=%d", want, len(got.characters), len(got.showcase))
+			}
+			if got.showcase[want-1].AvatarID != want {
+				t.Fatal("showcase order changed")
+			}
+		})
 	}
 }
 

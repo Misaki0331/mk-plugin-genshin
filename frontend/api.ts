@@ -23,6 +23,8 @@ export function api<T>(path: string, params: Record<string, unknown> = {}): Prom
 
 export type LinkChallenge = { uid: string; code: string; expiresAt: string; nextCheckAt: string; attempts: number };
 export type MeResponse = { uids: string[]; limit: number; pending: LinkChallenge | null };
+export type Preferences = { publishUid: boolean; publishSignature: boolean; rankingEnabled: boolean };
+export type RankingResponse = { metric: string; scheduleId: number; hasMore: boolean; entries: { rank: number; userId: string; accountId: string; uid?: string; nickname: string; value: number; difficulty?: number; seconds?: number; fetchedAt: string }[] };
 export type VerifyResponse = { verified: boolean; uid?: string; nextCheckAt?: string; expiresAt?: string };
 
 export type ShowcaseCharacter = {
@@ -85,11 +87,12 @@ export type BuildCharacter = {
 
 export type LinkedProfile = {
 	linked: true;
-	uid: string;
+	uid?: string;
+	accountId?: string;
 	nickname: string;
 	adventureRank: number;
 	worldLevel: number;
-	signature: string;
+	signature?: string;
 	region: string;
 	achievements: number;
 	spiral: string;

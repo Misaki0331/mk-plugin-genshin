@@ -25,7 +25,7 @@ var Plugin = plugin.Definition{
 	Name:       "genshin",
 	Version:    "0.2.0",
 	APIVersion: plugin.APIVersion,
-	Migrations: append(append(migrations, peerCacheMigration...), linkingMigration),
+	Migrations: append(append(migrations, peerCacheMigration...), linkingMigration, privacyMigration),
 	Routes:     routes,
 	Jobs:       jobs,
 	// 同じプラグインを入れた mk-go 同士で、リモート利用者の戦績を取り寄せる。
@@ -156,6 +156,7 @@ func routes(ctx plugin.Context, r plugin.Router) error {
 	// 固定で、Misskey 本体の API も POST 基本なのでそれに倣う。
 
 	registerLinkRoutes(ctx, r, db, client)
+	registerPrivacyRoutes(ctx, r, db)
 	r.POST("/profiles", func(req plugin.Request) (any, error) {
 		var body struct {
 			UserID string `json:"userId"`
@@ -354,9 +355,10 @@ func saveSnapshot(c context.Context, db snapshotWriter, s *snapshot) error {
 		INSERT INTO snapshots (
 			uid, nickname, level, world_level, signature, fetched_at, expires_at,
 			name_card_id, region, achievements, tower_floor, tower_level, profile_icon, showcase,
-			tower_star, theater_act, theater_mode, theater_star, fetter_count, characters)
+			tower_star, theater_act, theater_mode, theater_star, fetter_count, characters,
+			stygian_id, stygian_difficulty, stygian_seconds)
 		VALUES ($1, $2, $3, $4, $5, now(), now() + make_interval(secs => $6),
-			$7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+			$7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		ON CONFLICT (uid) DO UPDATE SET
 			nickname = EXCLUDED.nickname, level = EXCLUDED.level,
 			world_level = EXCLUDED.world_level, signature = EXCLUDED.signature,
@@ -367,32 +369,38 @@ func saveSnapshot(c context.Context, db snapshotWriter, s *snapshot) error {
 			showcase = EXCLUDED.showcase,
 			tower_star = EXCLUDED.tower_star, theater_act = EXCLUDED.theater_act,
 			theater_mode = EXCLUDED.theater_mode, theater_star = EXCLUDED.theater_star,
-			fetter_count = EXCLUDED.fetter_count, characters = EXCLUDED.characters
+			fetter_count = EXCLUDED.fetter_count, characters = EXCLUDED.characters,
+			stygian_id = EXCLUDED.stygian_id, stygian_difficulty = EXCLUDED.stygian_difficulty,
+			stygian_seconds = EXCLUDED.stygian_seconds
 	`, s.uid, s.nickname, s.level, s.worldLevel, s.signature, s.ttl,
 		s.nameCardID, s.region, s.achievements, s.towerFloor, s.towerLevel,
 		s.profileIcon, showcase,
-		s.towerStar, s.theaterAct, s.theaterMode, s.theaterStar, s.fetterCount, characters)
+		s.towerStar, s.theaterAct, s.theaterMode, s.theaterStar, s.fetterCount, characters,
+		s.stygianID, s.stygianDifficulty, s.stygianSeconds)
 	return err
 }
 
 // --- Enka.Network ---
 
 type snapshot struct {
-	uid          string
-	nickname     string
-	level        int
-	worldLevel   int
-	signature    string
-	nameCardID   int
-	region       string
-	achievements int
-	towerFloor   int
-	towerLevel   int
-	towerStar    int
-	theaterAct   int
-	theaterMode  int
-	theaterStar  int
-	fetterCount  int
+	uid               string
+	nickname          string
+	level             int
+	worldLevel        int
+	signature         string
+	nameCardID        int
+	region            string
+	achievements      int
+	towerFloor        int
+	towerLevel        int
+	towerStar         int
+	theaterAct        int
+	theaterMode       int
+	theaterStar       int
+	fetterCount       int
+	stygianID         int
+	stygianDifficulty int
+	stygianSeconds    int
 	// profileIcon は保存する形そのもの。新形式は `pfp:<id>`、旧形式は
 	// キャラ id の 10 進表記。**どちらの id 空間かを区別するため**に接頭辞を
 	// 付ける (数値だけだと引く先を間違える)。
@@ -507,6 +515,9 @@ func (c *enkaClient) fetch(ctx context.Context, uid string) (*snapshot, error) {
 			TheaterModeIndex     int    `json:"theaterModeIndex"`
 			TheaterStarIndex     int    `json:"theaterStarIndex"`
 			FetterCount          int    `json:"fetterCount"`
+			StygianID            int    `json:"stygianId"`
+			StygianIndex         int    `json:"stygianIndex"`
+			StygianSeconds       int    `json:"stygianSeconds"`
 			ProfilePicture       struct {
 				// AvatarID は旧形式 (キャラ id)。
 				AvatarID int `json:"avatarId"`
@@ -541,23 +552,24 @@ func (c *enkaClient) fetch(ctx context.Context, uid string) (*snapshot, error) {
 		theaterMode: pi.TheaterModeIndex,
 		theaterStar: pi.TheaterStarIndex,
 		fetterCount: pi.FetterCount,
+		stygianID:   pi.StygianID, stygianDifficulty: pi.StygianIndex, stygianSeconds: pi.StygianSeconds,
 		profileIcon: profileIconKey(pi.ProfilePicture.ID, pi.ProfilePicture.AvatarID), ttl: ttl,
 		characters: make([]character, 0, len(parsed.AvatarInfoList)),
 	}
 
-	// ショーケースは最大 8 体。取得元が想定外の数を返しても保存が膨らまない
+	// ショーケースは最大 12 体。取得元が想定外の数を返しても保存が膨らまない
 	// ように、showcase と同じくここでも切る。
 	for i, a := range parsed.AvatarInfoList {
-		if i >= 8 {
+		if i >= 12 {
 			break
 		}
 		snap.characters = append(snap.characters, c.buildCharacter(ctx, a))
 	}
 
-	// **ショーケースのキャラは 8 件までに切る。** 表示に使うのは数件で、
+	// **ショーケースのキャラは 12 件までに切る。**
 	// 取得元が想定外の数を返したときに保存が膨らむのを防ぐ。
 	for i, a := range pi.ShowAvatarInfoList {
-		if i >= 8 {
+		if i >= 12 {
 			break
 		}
 		e := showcaseEntry{AvatarID: a.AvatarID, Level: a.Level}

@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 <template>
 <div>
-	<ProfileCard v-for="profile in profiles" :key="profile.uid" :ctx="ctx" :profile="profile"/>
+	<ProfileCard v-for="(profile, i) in profiles" :key="profile.accountId ?? profile.uid ?? i" :ctx="ctx" :profile="profile"/>
 </div>
 </template>
 <script lang="ts" setup>

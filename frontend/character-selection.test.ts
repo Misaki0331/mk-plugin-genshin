@@ -18,4 +18,10 @@ describe('showcase character selection', () => {
 		expect(selectedBuild(showcase, characters, null)).toBeNull();
 		expect(selectedBuild(showcase, characters, 3)).toBeNull();
 	});
+	it('selects the twelfth preview and matches reordered details', () => {
+		const previews = Array.from({ length: 12 }, (_, index) => ({ avatarId: index + 1, level: 90, element: '', icon: '' } satisfies ShowcaseCharacter));
+		const details = [...previews].reverse().map(preview => ({ avatarId: preview.avatarId } as BuildCharacter));
+		expect(selectedBuild(previews, details, 11)?.avatarId).toBe(12);
+		expect(selectedBuild(previews, details, 12)).toBeNull();
+	});
 });

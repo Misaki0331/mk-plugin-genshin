@@ -20,7 +20,17 @@ type linkingAPI struct{ limit atomic.Int64 }
 
 func (a *linkingAPI) Anonymous() plugin.Caller    { return a }
 func (a *linkingAPI) AsUser(string) plugin.Caller { return a }
-func (a *linkingAPI) Call(_ context.Context, endpoint string, _ any) (json.RawMessage, error) {
+func (a *linkingAPI) Call(_ context.Context, endpoint string, params any) (json.RawMessage, error) {
+	if endpoint == "users/show" {
+		if ids, ok := params.(map[string]any)["userIds"].([]string); ok {
+			users := []map[string]any{}
+			for _, id := range ids {
+				users = append(users, map[string]any{"id": id, "host": nil, "isSuspended": false})
+			}
+			return json.Marshal(users)
+		}
+		return json.RawMessage(`{"host":null,"isSuspended":false}`), nil
+	}
 	if endpoint != "i" {
 		return nil, fmt.Errorf("unexpected endpoint: %s", endpoint)
 	}

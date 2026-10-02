@@ -7,9 +7,11 @@ import { definePlugin } from '@/plugin-api.js';
 import { initApi } from './api.js';
 import ProfileCards from './ProfileCards.vue';
 import SettingsSection from './SettingsSection.vue';
+import Rankings from './Rankings.vue';
 
 export default definePlugin({
 	name: 'genshin',
+	pages: [{ path: '/rankings', component: Rankings, navTitle: '原神ランキング', navIcon: 'ti ti-trophy' }],
 
 	setup(host) {
 		initApi(host.api);

@@ -41,6 +41,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<span v-if="data.region" :class="$style.stat">{{ data.region }}</span>
 			</div>
 
+			<div v-if="profileRankings.length > 0" :class="$style.stats">
+				<a href="/plugin/genshin/rankings"><i class="ti ti-trophy"></i> サーバー内の原神ランキング</a>
+				<span v-for="ranking in profileRankings" :key="ranking.metric" :class="$style.stat">{{ rankingLabels[ranking.metric] }} {{ ranking.rank }}位</span>
+			</div>
+
 			<div v-if="showcase.length > 0" :class="$style.showcase">
 				<button
 					v-for="(c, i) in showcase"
@@ -114,24 +119,40 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div :class="$style.footer">UID {{ data.uid }}</div>
+			<div v-if="data.uid" :class="$style.footer">UID {{ data.uid }}</div>
 		</div>
 	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import type { SlotContext } from '@/plugin-api.js';
 import { api } from './api.js';
 import { selectedBuild } from './character-selection.js';
-import type { ProfileResponse, LinkedProfile, Stat } from './api.js';
+import type { ProfileResponse, LinkedProfile, Stat, RankingResponse } from './api.js';
+import { rankingMetrics, rankingLabels } from './ranking-query.js';
 
 const props = defineProps<{ ctx: SlotContext; profile?: LinkedProfile }>();
 
 const data = ref<LinkedProfile | null>(null);
 const open = ref(false);
 const selected = ref<number | null>(null);
+const profileRankings = ref<{ metric: typeof rankingMetrics[number]; rank: number }[]>([]);
+watch([open, () => data.value?.accountId], async ([expanded, accountId], _previous, onCleanup) => {
+	let active = true;
+	onCleanup(() => { active = false; });
+	profileRankings.value = [];
+	if (!expanded || !accountId || !props.ctx.user || props.ctx.user.host != null) return;
+	const ranks = await Promise.all(rankingMetrics.map(async metric => {
+		try {
+			const response = await api<RankingResponse>('rankings', { metric, accountId });
+			const entry = response.entries.find(item => item.accountId === accountId);
+			return entry ? { metric, rank: entry.rank } : null;
+		} catch { return null; }
+	}));
+	if (active) profileRankings.value = ranks.filter(rank => rank != null);
+});
 
 // 表示に使うのはショーケースの並び。ビルド詳細 (characters) は非公開だと
 // 空になるので、アイコン列は従来どおり showcase から作る。
