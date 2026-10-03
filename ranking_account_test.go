@@ -10,7 +10,7 @@ import (
 
 func TestRankingAccountLookupKeepsGlobalRankAndEligibility(t *testing.T) {
 	db := testDB(t)
-	h := plugintest.New(t).WithName("genshin").WithDB(db).WithAPI(&rankingEligibilityAPI{}).Routes(Plugin)
+	h := plugintest.New(t).WithName("genshin").WithDB(db).WithAPI(&rankingEligibilityAPI{}).Routes(rankingTestPlugin())
 	var target string
 	for i := range 52 {
 		uid := fmt.Sprintf("800000%03d", i)

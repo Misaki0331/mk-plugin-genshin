@@ -54,7 +54,7 @@ type settings struct {
 func loadSettings(ctx plugin.Context) (settings, error) {
 	s := settings{
 		Endpoint:       "https://enka.network",
-		UserAgent:      "mk-go-plugin-genshin/0.1 (+https://github.com/shiroha-a/mk)",
+		UserAgent:      "mk-go-plugin-genshin/0.2.0 (+https://github.com/shiroha-a/mk)",
 		TimeoutSeconds: 10,
 		Language:       "ja",
 	}
@@ -145,6 +145,10 @@ var migrations = []plugin.Migration{
 var uidPattern = regexp.MustCompile(`^[1-9][0-9]{8,9}$`)
 
 func routes(ctx plugin.Context, r plugin.Router) error {
+	return routesWithRankingScanInterval(ctx, r, time.Second)
+}
+
+func routesWithRankingScanInterval(ctx plugin.Context, r plugin.Router, interval time.Duration) error {
 	set, err := loadSettings(ctx)
 	if err != nil {
 		return err
@@ -156,7 +160,9 @@ func routes(ctx plugin.Context, r plugin.Router) error {
 	// 固定で、Misskey 本体の API も POST 基本なのでそれに倣う。
 
 	registerLinkRoutes(ctx, r, db, client)
-	registerPrivacyRoutes(ctx, r, db)
+	rankingGuard := newRankingScanGuard()
+	rankingGuard.minInterval = interval
+	registerPrivacyRoutes(ctx, r, db, rankingGuard)
 	r.POST("/profiles", func(req plugin.Request) (any, error) {
 		var body struct {
 			UserID string `json:"userId"`

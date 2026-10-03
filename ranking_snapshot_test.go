@@ -9,7 +9,7 @@ import (
 func TestRankingCandidateSnapshotSurvivesConcurrentValueChange(t *testing.T) {
 	db := testDB(t)
 	api := &rankingEligibilityAPI{}
-	h := plugintest.New(t).WithName("genshin").WithDB(db).WithAPI(api).Routes(Plugin)
+	h := plugintest.New(t).WithName("genshin").WithDB(db).WithAPI(api).Routes(rankingTestPlugin())
 	if _, err := db.Exec(`INSERT INTO accounts(user_id,uid) SELECT 'u'||n,'800'||lpad(n::text,6,'0') FROM generate_series(1,205) n;
 		INSERT INTO snapshots(uid,nickname,level,world_level,signature,expires_at,achievements)
 		SELECT '800'||lpad(n::text,6,'0'),'Traveler',60,9,'',now()+interval '5 minutes',n FROM generate_series(1,205) n`); err != nil {

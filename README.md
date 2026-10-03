@@ -92,7 +92,7 @@ plugins:
   genshin:
     enabled: true
     endpoint: https://enka.network      # 取得元 (テスト用に差し替えられる)
-    userAgent: mk-go-plugin-genshin/0.1 (+https://github.com/shiroha-a/mk)
+    userAgent: mk-go-plugin-genshin/0.2.0 (+https://github.com/shiroha-a/mk)
     timeoutSeconds: 10
     language: ja                        # 名前の言語 (loc.json の言語コード)
 ```
@@ -170,5 +170,7 @@ AGPL-3.0-only。mk-go 本体と同じ。
 `/plugin/genshin/rankings` で、深境螺旋の星・実績・好感度MAX人数・幽境の激戦をUIDごとに表示する。対象はサーバー内の確定済み連携だけで、未確認申請・旧データ・リモートキャッシュは含めない。複数UIDの値を合算しない。同点は同順位。取得済みスナップショットを使用し、一覧閲覧でEnkaへ追加取得しない。
 
 幽境は `playerInfo.stygianId`・`stygianIndex`・`stygianSeconds` を使用し、開催ID別に難易度降順・秒数昇順で順位を付ける。開催ID未指定時は、参加者の有効な記録の最大開催IDを表示する。難易度または秒数がない記録は除外する。深境螺旋は取得時点の公開星数であり、期間を指定した履歴ランキングではない。
+
+資格確認は同じ利用者集合への同時要求だけを共有し、結果は要求後に保持しない。公開設定・参加設定・凍結や削除状態は次の要求で再評価する。重い確認scanは同時1本・開始間隔1秒、実行・待機中の要求は合計8件までとし、超過時は429を返す。プロフィールカードの4指標はplugin内の集約endpointで1回の資格確認にまとめ、同じDBスナップショットを使う。
 
 Migration 9 で公開・参加設定、表示用のランダムな連携ID、幽境の保存項目を追加する。連携解除後もユーザーの公開・参加設定は維持する。

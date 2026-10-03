@@ -306,17 +306,20 @@ func verifyLink(req plugin.Request, ctx plugin.Context, db *sql.DB, client *enka
 	}
 	var signature string
 	var cacheUntil time.Time
-	err = tx.QueryRowContext(c, `SELECT signature,expires_at FROM (
-	 SELECT signature,expires_at FROM verification_cache WHERE uid=$1
-	 UNION ALL SELECT signature,expires_at FROM snapshots WHERE uid=$1
-	 ) cached WHERE expires_at>clock_timestamp() ORDER BY expires_at DESC LIMIT 1`, pending.UID).Scan(&signature, &cacheUntil)
-	if errors.Is(err, sql.ErrNoRows) {
-		var snap *snapshot
-		snap, err = client.fetch(c, pending.UID)
+	var fetched *snapshot
+	var cachedSnapshot bool
+	err = tx.QueryRowContext(c, `SELECT signature,expires_at,is_snapshot FROM (
+	 SELECT signature,expires_at,false AS is_snapshot FROM verification_cache WHERE uid=$1
+	 UNION ALL SELECT signature,expires_at,true AS is_snapshot FROM snapshots WHERE uid=$1
+	 ) cached WHERE expires_at>clock_timestamp() ORDER BY expires_at DESC LIMIT 1`, pending.UID).Scan(&signature, &cacheUntil, &cachedSnapshot)
+	// A signature-only cache can prove that another request observed the code,
+	// but it deliberately contains no profile data. Re-fetch a matching proof
+	// so a successful link always persists a verified snapshot.
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && !cachedSnapshot && signatureHasCode(signature, pending.Code)) {
+		fetched, err = client.fetch(c, pending.UID)
 		if err == nil {
-			signature = snap.signature
-			cacheUntil = time.Now().Add(time.Duration(snap.ttl) * time.Second)
-			err = saveSnapshot(c, tx, snap)
+			signature = fetched.signature
+			cacheUntil = time.Now().Add(time.Duration(fetched.ttl) * time.Second)
 		}
 		if err == nil {
 			_, err = tx.ExecContext(c, `INSERT INTO verification_cache(uid,signature,expires_at) VALUES($1,$2,$3) ON CONFLICT(uid) DO UPDATE SET signature=EXCLUDED.signature,expires_at=EXCLUDED.expires_at`, pending.UID, signature, cacheUntil)
@@ -361,6 +364,13 @@ func verifyLink(req plugin.Request, ctx plugin.Context, db *sql.DB, client *enka
 	}
 	if !now.Before(pending.ExpiresAt) {
 		return nil, plugin.Errorf(410, "コードの有効期限が切れました。再発行してください")
+	}
+	// A successful upstream lookup is not ownership proof by itself. Keep only
+	// its signature and TTL until the complete issued code matches.
+	if fetched != nil {
+		if err = saveSnapshot(c, tx, fetched); err != nil {
+			return nil, err
+		}
 	}
 	result, err := tx.ExecContext(c, `INSERT INTO accounts(user_id,uid) VALUES($1,$2) ON CONFLICT(uid) DO NOTHING`, me, pending.UID)
 	if err != nil {

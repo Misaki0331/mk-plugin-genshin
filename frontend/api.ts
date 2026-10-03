@@ -25,6 +25,7 @@ export type LinkChallenge = { uid: string; code: string; expiresAt: string; next
 export type MeResponse = { uids: string[]; limit: number; pending: LinkChallenge | null };
 export type Preferences = { publishUid: boolean; publishSignature: boolean; rankingEnabled: boolean };
 export type RankingResponse = { metric: string; scheduleId: number; hasMore: boolean; entries: { rank: number; userId: string; accountId: string; uid?: string; nickname: string; value: number; difficulty?: number; seconds?: number; fetchedAt: string }[] };
+export type ProfileRankingsResponse = { rankings: Record<'spiral' | 'achievements' | 'friendship' | 'stygian', RankingResponse> };
 export type VerifyResponse = { verified: boolean; uid?: string; nextCheckAt?: string; expiresAt?: string };
 
 export type ShowcaseCharacter = {

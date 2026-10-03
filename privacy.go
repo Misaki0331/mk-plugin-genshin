@@ -38,7 +38,7 @@ func loadPreferences(c context.Context, db *sql.DB, userID string) (preferences,
 	return p, err
 }
 
-func registerPrivacyRoutes(ctx plugin.Context, r plugin.Router, db *sql.DB) {
+func registerPrivacyRoutes(ctx plugin.Context, r plugin.Router, db *sql.DB, rankingGuard *rankingScanGuard) {
 	r.POST("/me/preferences", func(req plugin.Request) (any, error) {
 		if req.UserID() == "" {
 			return nil, plugin.Errorf(401, "ログインが必要です")
@@ -70,6 +70,9 @@ func registerPrivacyRoutes(ctx plugin.Context, r plugin.Router, db *sql.DB) {
 		return p, nil
 	})
 	r.POST("/rankings", func(req plugin.Request) (any, error) {
-		return rankingResponse(req.Context(), ctx, db, req)
+		return rankingResponse(req.Context(), ctx, db, req, rankingGuard)
+	})
+	r.POST("/rankings/profile", func(req plugin.Request) (any, error) {
+		return profileRankingResponse(req.Context(), ctx, db, req, rankingGuard)
 	})
 }

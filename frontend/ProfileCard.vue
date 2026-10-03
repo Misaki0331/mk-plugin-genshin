@@ -130,7 +130,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import type { SlotContext } from '@/plugin-api.js';
 import { api } from './api.js';
 import { selectedBuild } from './character-selection.js';
-import type { ProfileResponse, LinkedProfile, Stat, RankingResponse } from './api.js';
+import type { ProfileResponse, LinkedProfile, Stat, ProfileRankingsResponse } from './api.js';
 import { rankingMetrics, rankingLabels } from './ranking-query.js';
 
 const props = defineProps<{ ctx: SlotContext; profile?: LinkedProfile }>();
@@ -144,14 +144,16 @@ watch([open, () => data.value?.accountId], async ([expanded, accountId], _previo
 	onCleanup(() => { active = false; });
 	profileRankings.value = [];
 	if (!expanded || !accountId || !props.ctx.user || props.ctx.user.host != null) return;
-	const ranks = await Promise.all(rankingMetrics.map(async metric => {
-		try {
-			const response = await api<RankingResponse>('rankings', { metric, accountId });
-			const entry = response.entries.find(item => item.accountId === accountId);
+	try {
+		const response = await api<ProfileRankingsResponse>('rankings/profile', { accountId });
+		const ranks = rankingMetrics.map(metric => {
+			const entry = response.rankings[metric].entries.find(item => item.accountId === accountId);
 			return entry ? { metric, rank: entry.rank } : null;
-		} catch { return null; }
-	}));
-	if (active) profileRankings.value = ranks.filter(rank => rank != null);
+		});
+		if (active) profileRankings.value = ranks.filter(rank => rank != null);
+	} catch {
+		// Ranking availability must not break the profile card.
+	}
 });
 
 // 表示に使うのはショーケースの並び。ビルド詳細 (characters) は非公開だと

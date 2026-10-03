@@ -12,9 +12,14 @@ const ctx = { user: { id: 'u1', username: 'local', host: null } };
 beforeEach(() => {
 	vi.clearAllMocks();
 	mocks.eligible = true;
-	mocks.api.mockImplementation(async (path: string, params: { metric?: string; accountId?: string }) => {
+	mocks.api.mockImplementation(async (path: string, params: { accountId?: string }) => {
 		if (path === 'profiles') return { profiles: [{ linked: true, accountId: 'a1', nickname: 'Traveler', adventureRank: 60, worldLevel: 9, spiralStars: 36, achievements: 100, fetterCount: 10, showcase: [], characters: [] }] };
-		if (path === 'rankings') return { entries: mocks.eligible && params.metric === 'achievements' ? [{ accountId: params.accountId, rank: 52 }] : [] };
+		if (path === 'rankings/profile') return { rankings: {
+			spiral: { entries: [] },
+			achievements: { entries: mocks.eligible ? [{ accountId: params.accountId, rank: 52 }] : [] },
+			friendship: { entries: [] },
+			stygian: { entries: [] },
+		} };
 		throw new Error(`unexpected endpoint ${path}`);
 	});
 });
@@ -37,7 +42,7 @@ it('ランキング対象外のプロフィールではリンク・順位を表�
 	mocks.eligible = false;
 	render(ProfileCards, { props: { ctx } });
 	await fireEvent.click(await screen.findByRole('button', { name: /原神/ }));
-	await waitFor(() => expect(mocks.api).toHaveBeenCalledTimes(5));
+	await waitFor(() => expect(mocks.api).toHaveBeenCalledTimes(2));
 	expect(screen.queryByRole('link', { name: 'サーバー内の原神ランキング' })).toBeNull();
 	expect(screen.queryByText(/52位/)).toBeNull();
 });
