@@ -307,15 +307,11 @@ func verifyLink(req plugin.Request, ctx plugin.Context, db *sql.DB, client *enka
 	var signature string
 	var cacheUntil time.Time
 	var fetched *snapshot
-	var cachedSnapshot bool
-	err = tx.QueryRowContext(c, `SELECT signature,expires_at,is_snapshot FROM (
-	 SELECT signature,expires_at,false AS is_snapshot FROM verification_cache WHERE uid=$1
-	 UNION ALL SELECT signature,expires_at,true AS is_snapshot FROM snapshots WHERE uid=$1
-	 ) cached WHERE expires_at>clock_timestamp() ORDER BY expires_at DESC LIMIT 1`, pending.UID).Scan(&signature, &cacheUntil, &cachedSnapshot)
-	// A signature-only cache can prove that another request observed the code,
-	// but it deliberately contains no profile data. Re-fetch a matching proof
-	// so a successful link always persists a verified snapshot.
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && !cachedSnapshot && signatureHasCode(signature, pending.Code)) {
+	err = tx.QueryRowContext(c, `SELECT signature,expires_at FROM (
+	 SELECT signature,expires_at FROM verification_cache WHERE uid=$1
+	 UNION ALL SELECT signature,expires_at FROM snapshots WHERE uid=$1
+	 ) cached WHERE expires_at>clock_timestamp() ORDER BY expires_at DESC LIMIT 1`, pending.UID).Scan(&signature, &cacheUntil)
+	if errors.Is(err, sql.ErrNoRows) {
 		fetched, err = client.fetch(c, pending.UID)
 		if err == nil {
 			signature = fetched.signature

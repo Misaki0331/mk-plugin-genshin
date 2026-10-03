@@ -161,7 +161,7 @@ func TestVerificationTTLAndExpiry(t *testing.T) {
 	}
 }
 
-func TestVerificationRefetchesMatchingSignatureOnlyCache(t *testing.T) {
+func TestVerificationMatchingSignatureCachePreservesTTL(t *testing.T) {
 	f := newVerificationFixture(t, 1)
 	p := f.begin(t, "u1", "800000001")
 	if _, err := f.db.Exec(`INSERT INTO verification_cache(uid,signature,expires_at) VALUES($1,$2,now()+interval '5 minutes')`, p.UID, p.Code); err != nil {
@@ -171,15 +171,15 @@ func TestVerificationRefetchesMatchingSignatureOnlyCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.(map[string]any)["verified"] != true || f.calls.Load() != 1 {
-		t.Fatalf("cached proof was not revalidated: result=%v calls=%d", res, f.calls.Load())
+	if res.(map[string]any)["verified"] != true || f.calls.Load() != 0 || f.count(t) != 1 {
+		t.Fatalf("cached proof bypassed TTL or failed to link: result=%v calls=%d", res, f.calls.Load())
 	}
 	var snapshots int
 	if err := f.db.QueryRow(`SELECT count(*) FROM snapshots`).Scan(&snapshots); err != nil {
 		t.Fatal(err)
 	}
-	if snapshots != 1 {
-		t.Fatal("verified UID snapshot was not persisted")
+	if snapshots != 0 {
+		t.Fatal("signature-only cache persisted an unverified snapshot")
 	}
 }
 
